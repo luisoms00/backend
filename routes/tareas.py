@@ -1,4 +1,5 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, jwrequired, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from config.db import get_db_connection
 
 # create blueprint
@@ -6,8 +7,31 @@ tareas_bp = Blueprint('tareas', __name__)
 
 #Create a Endpoint, get tareas
 @tareas_bp.route('/obtener', methods=['GET'])
+@jwt_required()
 def get():
-    return jsonify({"Mensaje": "Estas son tus tareas"})
+    current = get_jwt_identity()
+    
+    cursor=get_db_connection()
+    query = '''SELECT a.id_tarea, a.descripcion, b.name 
+                FROM tareas as a 
+                INNER JOIN usuarios as b ON a.id_usuario = b.id_usuario
+                WHERE a.id_usuario = %s'''
+                
+    cursor.execute(query, (current,))
+    tareas = cursor.fetchall()
+    cursor.close()
+    
+    if not tareas:
+        return jsonify({"error": "No se encontraron tareas"}), 404
+    
+    tareas = [{"id": tarea[0], "descripcion": tarea[1], "name":tarea[2]} for tarea in tareas]
+    
+    if not tareas:
+        return jsonify({"error": "No se encontraron tareas"}), 404
+    
+    return jsonify({"tareas": tareas}), 200
+
+
 
 #Create endpoint with post getting data from the body
 @tareas_bp.route('/crear', methods=['POST'])
